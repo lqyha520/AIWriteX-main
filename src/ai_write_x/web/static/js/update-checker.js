@@ -7,6 +7,8 @@ class UpdateChecker {
         this.policy = null;
         this.progressTimer = null;
         this.forceMode = false;
+        this.silentAutoMode = false;
+        this.autoRestartTriggered = false;
         this.elements = {};
 
         window.__aiwritexUpdateCheckerInstance = this;
@@ -106,12 +108,44 @@ class UpdateChecker {
     async checkStartupPolicy() {
         try {
             const policy = await this.fetchPolicy();
-            if (policy.startup_check && policy.force_update) {
-                this.showForceOverlay(policy);
+            if (!policy.enabled || !policy.startup_check) {
+                return;
+            }
+
+            if (policy.should_auto_update) {
+                await this.runSilentAutoUpdate(policy);
+                return;
+            }
+
+            if (policy.force_update) {
+                if (policy.auto_update_silent && policy.can_update) {
+                    await this.runSilentAutoUpdate(policy);
+                } else {
+                    this.showForceOverlay(policy);
+                }
             }
         } catch (error) {
             console.error('Startup update check failed:', error);
         }
+    }
+
+    async runSilentAutoUpdate(policy) {
+        this.policy = policy;
+        this.silentAutoMode = true;
+        this.forceMode = true;
+        this.autoRestartTriggered = false;
+
+        this.openModal(true);
+        this.resetProgress();
+        this.renderLogs([
+            `检测到新版本 v${policy.latest_version}（当前 v${policy.current_version}）`,
+            '正在自动下载并安装，请勿关闭程序...',
+            '',
+            policy.release_notes || '暂无更新说明',
+        ]);
+        this.renderFooter('<button class="modal-btn secondary-btn" disabled>自动更新中...</button>');
+
+        await this.startUpdate(true);
     }
 
     showForceOverlay(policy) {
@@ -255,11 +289,19 @@ class UpdateChecker {
         this.renderFooter('<button class="modal-btn secondary-btn" onclick="window.updateChecker.closeModal()">关闭</button>');
     }
 
-    async startUpdate() {
+    async startUpdate(silentAuto = false) {
+        if (silentAuto) {
+            this.silentAutoMode = true;
+            this.forceMode = true;
+        }
         this.openModal(this.forceMode);
-        this.renderLogs(['正在准备更新...', '开始下载安装包，请稍候。']);
+        if (!silentAuto) {
+            this.renderLogs(['正在准备更新...', '开始下载安装包，请稍候。']);
+        }
         this.resetProgress();
-        this.renderFooter('<button class="modal-btn secondary-btn" disabled>下载中...</button>');
+        if (!this.silentAutoMode) {
+            this.renderFooter('<button class="modal-btn secondary-btn" disabled>下载中...</button>');
+        }
 
         if (this.progressTimer) {
             clearInterval(this.progressTimer);
@@ -301,6 +343,13 @@ class UpdateChecker {
 
             if (data.status === 'ready_to_install') {
                 clearInterval(this.progressTimer);
+                if (this.silentAutoMode && !this.autoRestartTriggered) {
+                    this.autoRestartTriggered = true;
+                    this.appendLog('下载完成，即将自动重启并安装...', '#52c41a');
+                    this.renderFooter('<button class="modal-btn secondary-btn" disabled>正在重启并安装...</button>');
+                    await this.restartAndInstall();
+                    return;
+                }
                 this.renderFooter(`
                     ${this.forceMode ? '' : '<button class="modal-btn secondary-btn" onclick="window.updateChecker.closeModal()">后台等待</button>'}
                     <button class="modal-btn primary-btn" id="restart-btn" onclick="window.updateChecker.restartAndInstall()">立即重启并安装</button>

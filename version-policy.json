@@ -1,6 +1,8 @@
 {
-  "latest_version": "23.0.7",
-  "min_supported_version": "23.0.6",
-  "release_notes": "23.0.7: 配图张数可配置、存草稿/自动发布前同步上传正文配图、ComfyUI 封面与发布流程修复。",
+  "latest_version": "23.0.8",
+  "min_supported_version": "23.0.7",
+  "auto_update_on_startup": true,
+  "auto_update_silent": true,
+  "release_notes": "23.0.8: 启动时自动检测新版本并静默下载安装，无需用户确认。23.0.7 用户需手动更新一次，之后版本将全自动升级。",
   "published_at": "2026-05-23T00:00:00Z"
 }

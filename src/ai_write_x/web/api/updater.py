@@ -20,6 +20,8 @@ DEFAULT_UPDATE_CONFIG: Dict[str, Any] = {
     "enabled": True,
     "startup_check": True,
     "mandatory_update_enabled": True,
+    "auto_update_on_startup": True,
+    "auto_update_silent": True,
     "provider": "github_release",
     "github_owner": "lqyha520",
     "github_repo": "AIWriteX-main",
@@ -60,6 +62,10 @@ class UpdatePolicyResponse(BaseModel):
     release_notes: str
     published_at: str = ""
     source: str = ""
+    auto_update_on_startup: bool = True
+    auto_update_silent: bool = True
+    is_release_build: bool = False
+    should_auto_update: bool = False
 
 
 class UpdateRequest(BaseModel):
@@ -175,8 +181,11 @@ async def _load_release_info(settings: Dict[str, Any]) -> dict:
 
 
 async def _build_update_policy() -> UpdatePolicyResponse:
+    from src.ai_write_x.utils import utils as app_utils
+
     settings = _merge_update_config()
     current_version = get_version()
+    is_release_build = app_utils.get_is_release_ver()
 
     if not settings.get("enabled", True):
         return UpdatePolicyResponse(
@@ -191,6 +200,10 @@ async def _build_update_policy() -> UpdatePolicyResponse:
             download_url="",
             release_notes="更新功能已禁用",
             source="disabled",
+            auto_update_on_startup=False,
+            auto_update_silent=False,
+            is_release_build=is_release_build,
+            should_auto_update=False,
         )
 
     release_info = await _load_release_info(settings)
@@ -228,19 +241,42 @@ async def _build_update_policy() -> UpdatePolicyResponse:
     if settings.get("mandatory_update_enabled", True) and min_supported_version:
         force_update = _is_version_less(current_version, min_supported_version)
 
+    auto_update_on_startup = settings.get("auto_update_on_startup", True)
+    if manifest.get("auto_update_on_startup") is not None:
+        auto_update_on_startup = bool(manifest.get("auto_update_on_startup"))
+
+    auto_update_silent = settings.get("auto_update_silent", True)
+    if manifest.get("auto_update_silent") is not None:
+        auto_update_silent = bool(manifest.get("auto_update_silent"))
+
+    startup_check = bool(settings.get("startup_check", True))
+    can_update = bool(download_url)
+    should_auto_update = bool(
+        is_release_build
+        and startup_check
+        and auto_update_on_startup
+        and auto_update_silent
+        and has_update
+        and can_update
+    )
+
     return UpdatePolicyResponse(
         enabled=True,
-        startup_check=bool(settings.get("startup_check", True)),
+        startup_check=startup_check,
         current_version=current_version,
         latest_version=latest_version,
         min_supported_version=min_supported_version,
         has_update=has_update,
         force_update=force_update,
-        can_update=bool(download_url),
+        can_update=can_update,
         download_url=download_url,
         release_notes=release_notes,
         published_at=manifest.get("published_at") or release_info.get("published_at") or "",
         source=manifest_url or release_info.get("html_url") or "config",
+        auto_update_on_startup=bool(auto_update_on_startup),
+        auto_update_silent=bool(auto_update_silent),
+        is_release_build=is_release_build,
+        should_auto_update=should_auto_update,
     )
 
 

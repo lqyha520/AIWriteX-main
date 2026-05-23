@@ -238,6 +238,8 @@ class Config:
                 "enabled": True,
                 "startup_check": True,
                 "mandatory_update_enabled": True,
+                "auto_update_on_startup": True,
+                "auto_update_silent": True,
                 "provider": "github_release",
                 "github_owner": "lqyha520",
                 "github_repo": "AIWriteX-main",

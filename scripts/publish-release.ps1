@@ -22,8 +22,13 @@ Write-Host "推送代码到 origin/main ..."
 git push origin main
 
 Write-Host "创建 Release $Tag ..."
-gh release upload $Tag $Setup $Policy --clobber 2>$null
-if ($LASTEXITCODE -ne 0) {
+$uploadOk = $false
+try {
+    gh release upload $Tag $Setup $Policy --clobber 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $uploadOk = $true }
+} catch {}
+
+if (-not $uploadOk) {
     gh release create $Tag $Setup $Policy `
         --title "AIWriteX $Tag" `
         --notes-file $Policy `
